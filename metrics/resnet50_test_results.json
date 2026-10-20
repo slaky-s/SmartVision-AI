@@ -1,0 +1,9 @@
+{
+    "model": "ResNet50_FineTuned",
+    "test_samples": 390,
+    "test_accuracy": 0.4,
+    "macro_precision": 0.44682283571735903,
+    "macro_recall": 0.39999999999999997,
+    "macro_f1": 0.4055905865790318,
+    "evaluation_preprocessing": "ResNet50 preprocess_input"
+}
