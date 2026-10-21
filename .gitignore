@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+mlflow.db
+smartvision_dataset/
+classification_models/
+configs/
+detection_fixed/
+yolov8_training/

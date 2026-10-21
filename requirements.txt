@@ -2,4 +2,7 @@ streamlit
 tensorflow
 ultralytics
 numpy
+pandas
 pillow
+streamlit-webrtc
+av
