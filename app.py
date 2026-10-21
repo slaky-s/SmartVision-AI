@@ -12,13 +12,10 @@ from PIL import Image
 import tensorflow as tf
 from tensorflow.keras.applications.resnet50 import preprocess_input
 from ultralytics import YOLO
+from streamlit_webrtc import VideoProcessorBase, webrtc_streamer
+import av
 
-st.set_page_config(
-    page_title="SmartVision AI",
-    page_icon="👁️",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+st.set_page_config(page_title="SmartVision AI",page_icon="👁️",layout="wide",initial_sidebar_state="expanded",)
 
 APP_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -29,12 +26,7 @@ DETECTOR_PATH = MODEL_DIR / "best.pt"
 IMAGE_SIZE = (224, 224)
 
 # Alphabetical class order used by image_dataset_from_directory.
-CLASS_NAMES = [
-    "airplane", "bed", "bench", "bicycle", "bird", "bottle", "bowl",
-    "bus", "cake", "car", "cat", "chair", "couch", "cow", "cup",
-    "dog", "elephant", "horse", "motorcycle", "person", "pizza",
-    "potted plant", "stop sign", "traffic light", "train", "truck",
-]
+CLASS_NAMES = ["airplane", "bed", "bench", "bicycle", "bird", "bottle", "bowl","bus", "cake", "car", "cat", "chair", "couch", "cow", "cup","dog", "elephant", "horse", "motorcycle", "person", "pizza","potted plant", "stop sign", "traffic light", "train", "truck",]
 
 # Latest recorded evaluation of the saved fine-tuned ResNet50 checkpoint.
 TEST_ACCURACY = 0.4000
@@ -99,13 +91,32 @@ def detect_objects(image: Image.Image, model, confidence: float):
     return annotated, detections
 
 
+class LiveYOLOProcessor(VideoProcessorBase):
+    """Run YOLO on each incoming webcam frame and return an annotated frame."""
+
+    def __init__(self, model, confidence: float = 0.25):
+        self.model = model
+        self.confidence = confidence
+
+    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+        image = frame.to_ndarray(format="rgb24")
+        result = self.model.predict(
+            source=image,
+            conf=self.confidence,
+            verbose=False,
+            imgsz=640,
+        )[0]
+        annotated = result.plot()[:, :, ::-1]  # BGR to RGB
+        return av.VideoFrame.from_ndarray(annotated, format="rgb24")
+
+
 with st.sidebar:
     st.title("👁️ SmartVision AI")
     st.caption("Intelligent Multi-Class Object Recognition")
     st.divider()
     page = st.radio(
         "Navigation",
-        ["Overview", "Image Classification", "Object Detection", "Model Performance"],
+        ["Overview", "Image Classification", "Object Detection", "Real-Time Webcam", "Model Performance"],
     )
     st.divider()
     st.caption("Models are loaded from the project's models/ directory.")
@@ -115,8 +126,8 @@ if page == "Overview":
     st.title("SmartVision AI")
     st.subheader("Intelligent Multi-Class Object Recognition System")
     st.write(
-        "Classify an object's image using fine-tuned ResNet50, or detect "
-        "multiple objects with YOLO."
+        "Classify an image using fine-tuned ResNet50, detect multiple objects "
+        "with YOLO, or run real-time webcam detection."
     )
 
     col1, col2, col3 = st.columns(3)
@@ -130,7 +141,10 @@ if page == "Overview":
         st.write("Predicts one of 26 classes and displays the top-five scores.")
     with right:
         st.markdown("### 🎯 Object Detection")
-        st.write("Detects multiple objects and draws bounding boxes with scores.")
+        st.write("Detects multiple objects and draws bounding boxes.")
+
+    st.markdown("### 📹 Real-Time Webcam")
+    st.write("Run YOLO on a live webcam stream with annotated video frames.")
 
     st.info(
         "The displayed accuracy is a measured result for the saved checkpoint. "
@@ -223,6 +237,41 @@ elif page == "Object Detection":
 
             except Exception as exc:
                 st.error(f"Object detection failed: {exc}")
+
+
+
+elif page == "Real-Time Webcam":
+    st.title("Real-Time Webcam Detection")
+    st.write(
+        "Start your camera to run live YOLO object detection. "
+        "Allow camera access when your browser asks."
+    )
+
+    live_confidence = st.slider(
+        "Live detection confidence threshold",
+        min_value=0.10,
+        max_value=0.90,
+        value=0.25,
+        step=0.05,
+        key="live_detection_confidence",
+    )
+
+    if not DETECTOR_PATH.exists():
+        st.error(f"YOLO model not found: {DETECTOR_PATH}")
+    else:
+        try:
+            detector = load_detector(str(DETECTOR_PATH))
+            webrtc_streamer(
+                key="smartvision-live-yolo",
+                video_processor_factory=lambda: LiveYOLOProcessor(detector, live_confidence),
+                media_stream_constraints={"video": True, "audio": False},
+                async_processing=True,)
+            st.caption(
+                "Tip: good lighting and a stable internet connection help. "
+                "If video is slow, try a lower camera resolution."
+            )
+        except Exception as exc:
+            st.error(f"Could not start live webcam detection: {exc}")
 
 
 elif page == "Model Performance":
